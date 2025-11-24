@@ -1,24 +1,44 @@
 terraform {
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
       version = "6.0.0-beta2"
     }
   }
 }
 
 provider "aws" {
-  # Configuration options
-  region = "sa-east-1"
+  region                   = "sa-east-1"
   shared_credentials_files = ["/home/amaurybs/.aws/credentials"]
   profile                  = "default"
 }
 
+# --- NOVA ADIÇÃO (Resolve o Risco LOW) ---
+# Cria uma chave KMS gerenciada por você (Customer Managed Key)
+resource "aws_kms_key" "ecr_key" {
+  description             = "Chave KMS para encriptacao do repositorio ECR bar"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true # Boa prática de segurança recomendada
+}
+# -----------------------------------------
+
 resource "aws_ecr_repository" "foo" {
-  name                 = "bar"
-  image_tag_mutability = "MUTABLE"
+  name = "bar"
+
+  # --- CORREÇÃO PRINCIPAL (Resolve o Risco HIGH) ---
+  # Garante que tags não podem ser sobrescritas (ex: deploy seguro)
+  image_tag_mutability = "IMMUTABLE" 
+  # -------------------------------------------------
 
   image_scanning_configuration {
     scan_on_push = true
   }
+
+  # --- NOVA ADIÇÃO (Resolve o Risco LOW) ---
+  # Configura o ECR para usar a chave criada acima
+  encryption_configuration {
+    encryption_type = "KMS"
+    kms_key         = aws_kms_key.ecr_key.arn
+  }
+  # -----------------------------------------
 }
